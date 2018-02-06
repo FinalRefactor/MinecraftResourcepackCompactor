@@ -8,3 +8,7 @@
 \.settings/
 
 \.gradle/
+
+build/
+
+out/
