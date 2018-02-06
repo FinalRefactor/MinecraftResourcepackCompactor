@@ -1,23 +1,19 @@
-package src.main.java.io.github.goldbigdragon.resourcepack.compactor;
+package io.github.goldbigdragon.resourcepack.compactor;
 
-import java.awt.image.BufferedImage;
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.util.ArrayList;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import com.googlecode.pngtastic.core.PngException;
+import com.googlecode.pngtastic.core.PngImage;
+import com.googlecode.pngtastic.core.PngOptimizer;
 
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
 import javax.imageio.stream.ImageOutputStream;
+import java.awt.image.BufferedImage;
+import java.io.*;
+import java.util.ArrayList;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /*
  * Copyright 2018 GoldBigDragon (https://github.com/GoldBigDragon)
@@ -158,7 +154,27 @@ public class Compressor extends Thread
 	                input = new File(fileName);
 	                if(fileName.endsWith(".png"))
 	                {
-	                	new com.googlecode.pngtastic.PngtasticOptimizer(fileName);
+		                Boolean removeGamma = false;
+		                Integer compressionLevel = 10-((int)Main.compressPower*10);
+		                if(compressionLevel > 9)
+			                compressionLevel = 9;
+		                else if(compressionLevel < 0)
+			                compressionLevel = 0;
+
+		                Integer iterations = 1;
+		                String compressor = "zopfli";
+		                String logLevel = "none";
+
+		                PngOptimizer optimizer = new PngOptimizer(logLevel);
+		                optimizer.setCompressor(compressor, iterations);
+
+		                try {
+			                PngImage pngImage = new PngImage(fileName, logLevel);
+			                optimizer.optimize(pngImage, fileName, removeGamma, compressionLevel);
+
+		                } catch (PngException | IOException e) {
+			                e.printStackTrace();
+		                }
 	    				remainning =  Main.totalSize-(Main.jsonFilePath.size()+Main.imageFilePath.size());
 	            		System.out.println("[" +remainning + " / " + Main.totalSize + "]"+fileName +" : "+(System.currentTimeMillis() - start)+"ms");
 	                	continue;

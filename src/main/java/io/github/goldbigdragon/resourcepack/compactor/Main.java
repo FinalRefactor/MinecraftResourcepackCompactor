@@ -1,4 +1,4 @@
-package src.main.java.io.github.goldbigdragon.resourcepack.compactor;
+package io.github.goldbigdragon.resourcepack.compactor;
 import java.io.File;
 import java.math.BigInteger;
 import java.util.ArrayList;
