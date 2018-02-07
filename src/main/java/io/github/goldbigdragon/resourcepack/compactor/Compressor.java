@@ -18,9 +18,6 @@
 package io.github.goldbigdragon.resourcepack.compactor;
 
 import com.google.common.io.MoreFiles;
-import com.googlecode.pngtastic.core.PngException;
-import com.googlecode.pngtastic.core.PngImage;
-import com.googlecode.pngtastic.core.PngOptimizer;
 import io.github.goldbigdragon.resourcepack.compactor.compressor.FileCompressor;
 
 import java.io.*;

@@ -1,6 +1,5 @@
 package io.github.goldbigdragon.resourcepack.compactor.compressor;
 
-import com.googlecode.pngtastic.core.PngException;
 import com.googlecode.pngtastic.core.PngImage;
 import com.googlecode.pngtastic.core.PngOptimizer;
 
