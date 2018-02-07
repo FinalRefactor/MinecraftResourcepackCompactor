@@ -99,12 +99,12 @@ public class Main {
 
         while (langBundle == null) {
             System.out.println(
-                    "[Select the language]: en-US[English], ko-KR[한국어], ja-JP[日本語], zh-TW[中国的], ru-RU[русский]");
+                    "[Select a language]: en-US[English], ko-KR[한국어], ja-JP[日本語], zh-TW[中国的], ru-RU[русский]");
             String code = scanner.nextLine();
             try {
                 langBundle = ResourceBundle.getBundle("Lang", Locale.forLanguageTag(code));
             } catch (MissingResourceException e) {
-                System.out.println("Locale does not supported: " + code);
+                System.out.println("The locale is not supported: " + code);
             }
         }
 
