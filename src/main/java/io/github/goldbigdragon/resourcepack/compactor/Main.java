@@ -63,7 +63,7 @@ public class Main {
         JsonCompressor jsonCompressor = new JsonCompressor();
         compressorMap.put("json", jsonCompressor);
         compressorMap.put("mcmeta", jsonCompressor);
-        PngCompressor pngCompressor = new PngCompressor((int) (10 - compressionQuality * 10));
+        PngCompressor pngCompressor = new PngCompressor((int) compressionQuality);
         compressorMap.put("png", pngCompressor);
 
         CountDownLatch doneSignal = new CountDownLatch(threadCount);
@@ -113,7 +113,8 @@ public class Main {
         System.out.print(" ▶ ");
         String pathString = scanner.nextLine();
 
-        loop:while (true) {
+        loop:
+        while (true) {
             printlnLocalized("select.compress-mode");
             System.out.print(" ▶ ");
             switch (scanner.nextLine()) {
@@ -131,7 +132,8 @@ public class Main {
         }
 
         if (compressImage) {
-            loop:while (true) {
+            loop:
+            while (true) {
                 printlnLocalized("select.compress-power");
                 System.out.print(" ▶ ");
 
