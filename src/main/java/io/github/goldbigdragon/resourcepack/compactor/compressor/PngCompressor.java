@@ -12,25 +12,20 @@ public class PngCompressor implements FileCompressor {
 
     public PngCompressor(int compressPower) {
         this.compressionLevel = 10 - compressPower * 10;
+        if (this.compressionLevel > 9) {
+            this.compressionLevel = 9;
+        } else if (this.compressionLevel < 0) {
+            this.compressionLevel = 0;
+        }
     }
 
     @Override
     public void compress(Path path) {
-        if (compressionLevel > 9) {
-            compressionLevel = 9;
-        } else if (compressionLevel < 0) {
-            compressionLevel = 0;
-        }
-
-        Integer iterations = 1;
-        String compressor = "zopfli";
-        String logLevel = "none";
-
-        PngOptimizer optimizer = new PngOptimizer(logLevel);
-        optimizer.setCompressor(compressor, iterations);
+        PngOptimizer optimizer = new PngOptimizer("none");
+        optimizer.setCompressor("zopfli", 1);
 
         try {
-            PngImage pngImage = new PngImage(path.toAbsolutePath().toString(), logLevel);
+            PngImage pngImage = new PngImage(path.toAbsolutePath().toString(), "none");
             optimizer.optimize(pngImage, path.toAbsolutePath().toString(), false, compressionLevel);
         } catch (PngException | IOException e) {
             e.printStackTrace();
