@@ -17,12 +17,9 @@
 
 package io.github.goldbigdragon.resourcepack.compactor;
 
-import de.xn__ho_hia.storage_unit.StorageUnit;
-import de.xn__ho_hia.storage_unit.StorageUnits;
-import org.jooq.lambda.Unchecked;
+import org.apache.commons.io.FileUtils;
 
 import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -32,20 +29,19 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Main {
-    public static boolean started = false;
+    public boolean started = false;
 
-    public static String path = "./";
-    public static boolean searchInnerDir = true;
-    public static float compressPower = 1f;
+    public Path path;
+    public boolean searchInnerDir = true;
+    public float compressionQuality = 1f;
 
-    public static List<Compressor> threads = new ArrayList<>();
+    public List<Compressor> threads = new ArrayList<>();
 
-    public static int totalSize = 0;
-    private static StorageUnit<?> originalSize = StorageUnits.kilobyte(0);
+    public int fileCount = 0;
+    private long originalSize = 0;
 
-
-    public static boolean compressText = false;
-    public static boolean compressImage = false;
+    public boolean compressText;
+    public boolean compressImage;
 
     private static void println(ResourceBundle bundle, String key) {
         System.out.println(
@@ -53,9 +49,13 @@ public class Main {
     }
 
     public static void main(String[] args) {
-        ResourceBundle bundle = null;
-        String temp;
+        new Main().run();
+    }
+
+    public void run() {
         Scanner scanner = new Scanner(System.in);
+
+        ResourceBundle bundle = null;
         while (bundle == null) {
             System.out.println(
                     "[Select the language]: en-US[English], ko-KR[한국어], ja-JP[日本語], zh-TW[中国的], ru-RU[русский]");
@@ -69,14 +69,10 @@ public class Main {
 
         println(bundle, "type.resource-pack-path");
         System.out.print(" ▶ ");
-        path = scanner.nextLine();
+        String pathString = scanner.nextLine();
 
-        int threadAmount;
-
-        loop:
-        while (true) {
-            println(bundle, "select.compress-mode");
-
+        loop:while (true) {
+            println(bundle, "select.compress-mode");\
             System.out.print(" ▶ ");
             switch (scanner.nextLine()) {
                 case "1":
@@ -93,23 +89,22 @@ public class Main {
         }
 
         if (compressImage) {
-            loop:
-            while (true) {
+            loop:while (true) {
                 println(bundle, "select.compress-power");
                 System.out.print(" ▶ ");
 
                 switch (scanner.nextLine()) {
                     case "1":
-                        compressPower = 0.9F;
+                        compressionQuality = 0.9F;
                         break loop;
                     case "2":
-                        compressPower = 0.7F;
+                        compressionQuality = 0.7F;
                         break loop;
                     case "3":
-                        compressPower = 0.5F;
+                        compressionQuality = 0.5F;
                         break loop;
                     case "4":
-                        compressPower = 0.3F;
+                        compressionQuality = 0.3F;
                         break loop;
                     case "5":
                         while (true) {
@@ -119,7 +114,7 @@ public class Main {
                             try {
                                 int parsedInt = Integer.parseInt(toParse);
                                 if (parsedInt >= 0 && parsedInt <= 1000) {
-                                    compressPower = 1.0f - (parsedInt * 0.001f);
+                                    compressionQuality = 1.0f - (parsedInt * 0.001f);
                                     break;
                                 }
                             } catch (NumberFormatException e) {
@@ -131,14 +126,16 @@ public class Main {
                 }
             }
         }
+
+        int threadCount;
         while (true) {
             println(bundle, "select.thread-count");
             System.out.print(" ▶ ");
-            temp = scanner.nextLine();
+            String threadCountInput = scanner.nextLine();
             try {
-                int parsedInt = Integer.parseInt(temp);
+                int parsedInt = Integer.parseInt(threadCountInput);
                 if (parsedInt >= 1 && parsedInt <= 1000) {
-                    threadAmount = parsedInt;
+                    threadCount = parsedInt;
                     break;
                 }
             } catch (NumberFormatException e) {
@@ -146,7 +143,7 @@ public class Main {
             }
         }
 
-        System.out.println("\n\nPath\t: " + path);
+        System.out.println("\n\nPath\t: " + pathString);
         System.out.print("Compress Target : ");
         if (compressText) {
             System.out.print("Minecraft modelling(Cubik Pro) .json , .mcmeta ");
@@ -155,76 +152,47 @@ public class Main {
         }
         System.out.println();
         if (compressImage) {
-            System.out.println("Compress Power : " + compressPower);
+            System.out.println("Compression Quality : " + compressionQuality);
         }
         System.out.println("[START]");
 
-        List<Path> paths = getPaths(Paths.get(path));
-        totalSize = paths.size();
+        path = Paths.get(pathString);
+        List<Path> paths = getContents(path);
+        fileCount = paths.size();
 
-        originalSize = summarizeSize(paths);
+        originalSize = sumSize(paths);
 
         started = true;
         threads.clear();
-        for (int count = 0; count < threadAmount; count++) {
+        for (int count = 0; count < threadCount; count++) {
             Compressor thread = new Compressor(count);
             threads.add(thread);
             thread.start();
         }
     }
 
-    public static List<Path> getPaths(Path path) {
+    public static List<Path> getContents(Path path) throws IOException {
         try (Stream<Path> stream = Files.walk(path)) {
             return stream.filter(Files::isRegularFile).collect(Collectors.toList());
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
         }
     }
 
-    public static StorageUnit<?> summarizeSize(Collection<Path> paths) {
-        return paths.stream()
-                    .map(Unchecked.function(Files::size))
-                    .map(StorageUnits::decimalValueOf)
-                    .reduce(StorageUnit::add)
-                    .orElseThrow(() -> new IllegalArgumentException("Stream must not be a null"));
+    public static long sumSize(Collection<Path> paths) throws IOException {
+        long sum = 0L;
+        for (Path path : paths) {
+            sum += Files.size(path);
+        }
+        return sum;
     }
 
-    public static void sendResult() {
-        StorageUnit<?> afterSize = summarizeSize(getPaths(Paths.get(path)));
+    public void printResult() throws IOException {
+        long afterSize = sumSize(getContents(path));
         System.out.println("[END]");
-        System.out.println("Edited Files\t: " + totalSize);
-
+        System.out.println("Edited Files\t: " + fileCount);
 
         System.out.println(originalSize + " [Before]");
-        System.out.println(sb.toString());
-
-        sb = new StringBuilder();
-        if (afterGb > 0) {
-            sb.append(afterGb).append("GB ");
-        }
-        if (afterMb > 0) {
-            sb.append(afterMb).append("MB ");
-        }
-        if (afterKb > 0) {
-            sb.append(afterKb).append("KB ");
-        }
-        sb.append(afterSize.toString());
-        sb.append("Byte [After]");
-        System.out.println(sb.toString());
-
-        sb = new StringBuilder();
-        if (originalGb - afterGb > 0) {
-            sb.append(originalGb - afterGb).append("GB ");
-        }
-        if (originalMb - afterMb > 0) {
-            sb.append(originalMb - afterMb).append("MB ");
-        }
-        if (originalKb - afterKb > 0) {
-            sb.append(originalKb - afterKb).append("KB ");
-        }
-        sb.append(originalSize.subtract(afterSize).toString());
-        sb.append("Byte [Saved]");
-        System.out.println(sb.toString());
+        System.out.println(FileUtils.byteCountToDisplaySize(afterSize) + " [After]");
+        System.out.println(FileUtils.byteCountToDisplaySize(originalSize - afterSize) + " [Saved]");
     }
 
 }
