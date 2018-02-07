@@ -38,7 +38,7 @@ public class Main {
     public static boolean searchInnerDir = true;
     public static float compressPower = 1f;
 
-    public static ArrayList<Compressor> threads = new ArrayList<>();
+    public static List<Compressor> threads = new ArrayList<>();
 
     public static int totalSize = 0;
     private static StorageUnit<?> originalSize = StorageUnits.kilobyte(0);

@@ -19,7 +19,7 @@ package io.github.goldbigdragon.resourcepack.compactor.util;
 
 import java.nio.file.Path;
 
-public class Util {
+public final class Util {
     private Util() {
         throw new UnsupportedOperationException("You cannot instantiate Util");
     }
