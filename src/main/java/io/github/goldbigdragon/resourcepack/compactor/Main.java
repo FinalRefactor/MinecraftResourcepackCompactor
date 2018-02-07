@@ -17,6 +17,7 @@
 
 package io.github.goldbigdragon.resourcepack.compactor;
 
+import io.github.goldbigdragon.resourcepack.compactor.util.Util;
 import org.apache.commons.io.FileUtils;
 
 import java.io.IOException;
@@ -25,20 +26,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Main {
-    public boolean started = false;
+    public boolean running = false;
 
     public Path path;
-    public boolean searchInnerDir = true;
-    public float compressionQuality = 1f;
+    public boolean searchInnerDir;
+    public float compressionQuality;
 
-    public List<Compressor> threads = new ArrayList<>();
-
-    public int fileCount = 0;
-    private long originalSize = 0;
+    public int fileCount;
+    private long originalSize;
 
     public boolean compressText;
     public boolean compressImage;
@@ -132,14 +132,16 @@ public class Main {
             println(bundle, "select.thread-count");
             System.out.print(" ▶ ");
             String threadCountInput = scanner.nextLine();
+            int parsedInt;
             try {
-                int parsedInt = Integer.parseInt(threadCountInput);
-                if (parsedInt >= 1 && parsedInt <= 1000) {
-                    threadCount = parsedInt;
-                    break;
-                }
+                parsedInt = Integer.parseInt(threadCountInput);
             } catch (NumberFormatException e) {
-                // ignore error
+                continue;
+            }
+
+            if (parsedInt >= 1 && parsedInt <= 1000) {
+                threadCount = parsedInt;
+                break;
             }
         }
 
@@ -157,36 +159,40 @@ public class Main {
         System.out.println("[START]");
 
         path = Paths.get(pathString);
-        List<Path> paths = getContents(path);
+        List<Path> paths;
+        try {
+            paths = Util.getContents(path);
+        } catch (IOException e) {
+            return;
+        }
         fileCount = paths.size();
 
-        originalSize = sumSize(paths);
+        try {
+            originalSize = Util.sumSize(paths);
+        } catch (IOException e) {
+            return;
+        }
 
-        started = true;
-        threads.clear();
-        for (int count = 0; count < threadCount; count++) {
-            Compressor thread = new Compressor(count);
-            threads.add(thread);
-            thread.start();
+        running = true;
+        CountDownLatch doneSignal = new CountDownLatch(threadCount);
+
+        for (int i = 0; i < threadCount; i++) {
+            new Compressor(this, i).start();
+        }
+        try {
+            doneSignal.await();
+        } catch (InterruptedException e) {
+            return;
+        }
+        try {
+            printResult();
+        } catch (IOException ignored) {
         }
     }
 
-    public static List<Path> getContents(Path path) throws IOException {
-        try (Stream<Path> stream = Files.walk(path)) {
-            return stream.filter(Files::isRegularFile).collect(Collectors.toList());
-        }
-    }
-
-    public static long sumSize(Collection<Path> paths) throws IOException {
-        long sum = 0L;
-        for (Path path : paths) {
-            sum += Files.size(path);
-        }
-        return sum;
-    }
 
     public void printResult() throws IOException {
-        long afterSize = sumSize(getContents(path));
+        long afterSize = Util.sumSize(Util.getContents(path));
         System.out.println("[END]");
         System.out.println("Edited Files\t: " + fileCount);
 

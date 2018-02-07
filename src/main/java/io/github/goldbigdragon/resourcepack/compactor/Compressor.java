@@ -22,45 +22,33 @@ import com.googlecode.pngtastic.core.PngImage;
 import com.googlecode.pngtastic.core.PngOptimizer;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.concurrent.CountDownLatch;
 
 public class Compressor extends Thread {
-    public Compressor(int count) {
+
+    private Main main;
+    private CountDownLatch countDownLatch;
+
+    public Compressor(Main main, int count, CountDownLatch countDownLatch) {
+        this.main = main;
         this.setName("[Thread" + count + "] Created");
+        this.countDownLatch = countDownLatch;
     }
 
     @Override
     public void run() {
         try {
-            BufferedReader br;
-            BufferedWriter bw;
-            File file;
-            StringBuilder sb;
-            StringBuilder originalSb;
-            String line;
-            String[] textures;
-            boolean copyrightIndication;
-            int textureNumber;
-            ArrayList<String> originalTextureName;
-            ArrayList<String> tinifyTextureName;
-
-            File input;
-
-            int remainning;
+            int remaining;
             long start;
             String fileName;
 
-            while (OldMain.started) {
-                if (OldMain.compressText && !OldMain.jsonFilePath.isEmpty()) {
-                } else if (OldMain.compressImage && !OldMain.imageFilePath.isEmpty()) {
+            while (main.running) {
                     start = System.currentTimeMillis();
-                    fileName = OldMain.imageFilePath.get(0);
-                    OldMain.imageFilePath.remove(fileName);
+                    fileName = main.imageFilePath.get(0);
+                    main.imageFilePath.remove(fileName);
                     input = new File(fileName);
                     if (fileName.endsWith(".png")) {
-                        Integer compressionLevel = 10 - ((int) OldMain.compressPower * 10);
+                        Integer compressionLevel = 10 - ((int) main.compressPower * 10);
                         if (compressionLevel > 9) { compressionLevel = 9; } else if (compressionLevel < 0) {
                             compressionLevel = 0;
                         }
@@ -80,11 +68,11 @@ public class Compressor extends Thread {
                             e.printStackTrace();
                         }
 
-                        remainning = OldMain.totalSize - (OldMain.jsonFilePath.size() + OldMain.imageFilePath.size());
+                        remaining = main.fileCount - (main.jsonFilePath.size() + main.imageFilePath.size());
                         System.out.println("[" +
-                                           remainning +
+                                           remaining +
                                            " / " +
-                                           OldMain.totalSize +
+                                           main.totalSize +
                                            "]" +
                                            fileName +
                                            " : " +
@@ -92,14 +80,11 @@ public class Compressor extends Thread {
                                            "ms");
                         continue;
                     }
-                } else {
-                    break;
-                }
-                remainning = OldMain.totalSize - (OldMain.jsonFilePath.size() + OldMain.imageFilePath.size());
+                remaining = main.fileCount - (main.jsonFilePath.size() + main.imageFilePath.size());
                 System.out.println("[" +
-                                   remainning +
+                                   remaining +
                                    " / " +
-                                   OldMain.totalSize +
+                                   main.fileCount +
                                    "]" +
                                    fileName +
                                    " : " +
@@ -110,10 +95,7 @@ public class Compressor extends Thread {
             e.printStackTrace();
         }
         System.out.println("[Thread" + getName() + "] Finished work");
-        if (OldMain.threads.size() == 1) {
-            OldMain.sendResult();
-        }
-        OldMain.threads.remove(this);
+        countDownLatch.countDown();
     }
 
     public String getConvertedTextureName(int order) {

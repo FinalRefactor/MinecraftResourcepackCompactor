@@ -10,8 +10,8 @@ import java.nio.file.Path;
 public class PngCompressor implements FileCompressor {
     private int compressionLevel;
 
-    public PngCompressor(int compressPower) {
-        this.compressionLevel = 10 - compressPower * 10;
+    public PngCompressor(int compressionLevel) {
+        this.compressionLevel = 10 - compressionLevel * 10;
         if (this.compressionLevel > 9) {
             this.compressionLevel = 9;
         } else if (this.compressionLevel < 0) {
@@ -20,15 +20,11 @@ public class PngCompressor implements FileCompressor {
     }
 
     @Override
-    public void compress(Path path) {
+    public void compress(Path path) throws IOException {
         PngOptimizer optimizer = new PngOptimizer("none");
         optimizer.setCompressor("zopfli", 1);
 
-        try {
-            PngImage pngImage = new PngImage(path.toAbsolutePath().toString(), "none");
-            optimizer.optimize(pngImage, path.toAbsolutePath().toString(), false, compressionLevel);
-        } catch (PngException | IOException e) {
-            e.printStackTrace();
-        }
+        PngImage pngImage = new PngImage(path.toAbsolutePath().toString(), "none");
+        optimizer.optimize(pngImage, path.toAbsolutePath().toString(), false, compressionLevel);
     }
 }
