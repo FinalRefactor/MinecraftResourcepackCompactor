@@ -62,6 +62,7 @@ public class Main {
         compressorMap.put("jpeg", jpegCompressor);
         JsonCompressor jsonCompressor = new JsonCompressor();
         compressorMap.put("json", jsonCompressor);
+        compressorMap.put("mcmeta", jsonCompressor);
         PngCompressor pngCompressor = new PngCompressor((int) (10 - compressionQuality * 10));
         compressorMap.put("png", pngCompressor);
 
