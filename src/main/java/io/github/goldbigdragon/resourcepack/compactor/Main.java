@@ -6,9 +6,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 /*
- * Copyright 2018 GoldBigDragon (https://github.com/GoldBigDragon)
+ * Copyright 2018 GoldBigDragon (https://github.com/GoldBigDragon) and contributors
  *
- * GoldBigDragonRPG is free software: you can redistribute it and/or modify
+ * MinecraftResourcepackCompactor is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 2 of the License.
 
