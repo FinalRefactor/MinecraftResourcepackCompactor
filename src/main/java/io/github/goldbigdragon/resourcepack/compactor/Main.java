@@ -17,62 +17,103 @@
 
 package io.github.goldbigdragon.resourcepack.compactor;
 
+import io.github.goldbigdragon.resourcepack.compactor.compressor.FileCompressor;
+import io.github.goldbigdragon.resourcepack.compactor.compressor.JpegCompressor;
+import io.github.goldbigdragon.resourcepack.compactor.compressor.JsonCompressor;
+import io.github.goldbigdragon.resourcepack.compactor.compressor.PngCompressor;
 import io.github.goldbigdragon.resourcepack.compactor.util.Util;
 import org.apache.commons.io.FileUtils;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.CountDownLatch;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class Main {
-    public boolean running = false;
 
-    public Path path;
-    public boolean searchInnerDir;
-    public float compressionQuality;
+    public ResourceBundle langBundle;
 
-    public int fileCount;
-    private long originalSize;
+    public Path rootDirectory;
+    public ArrayDeque<Path> contents;
+
+    public long originalSize;
+    public long originalFileCount;
+
+    public int threadCount;
+    public Map<String, FileCompressor> compressorMap = new HashMap<>();
 
     public boolean compressText;
     public boolean compressImage;
-
-    private static void println(ResourceBundle bundle, String key) {
-        System.out.println(
-                new String(bundle.getString(key).getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8));
-    }
+    public boolean searchInnerDir;
+    public float compressionQuality;
 
     public static void main(String[] args) {
         new Main().run();
     }
 
     public void run() {
+        promptOptions();
+        printOptions();
+
+        JpegCompressor jpegCompressor = new JpegCompressor(compressionQuality);
+        compressorMap.put("jpg", jpegCompressor);
+        compressorMap.put("jpeg", jpegCompressor);
+        JsonCompressor jsonCompressor = new JsonCompressor();
+        compressorMap.put("json", jsonCompressor);
+        PngCompressor pngCompressor = new PngCompressor((int) (10 - compressionQuality * 10));
+        compressorMap.put("png", pngCompressor);
+
+        CountDownLatch doneSignal = new CountDownLatch(threadCount);
+
+        for (int i = 0; i < threadCount; i++) {
+            new Compressor(this, i, doneSignal).start();
+        }
+        try {
+            doneSignal.await();
+        } catch (InterruptedException e) {
+            return;
+        }
+
+        try {
+            printResult();
+        } catch (IOException ignored) {
+        }
+    }
+
+    public synchronized Optional<Path> getNextFileToProcess() {
+        if (contents.isEmpty()) {
+            return Optional.empty();
+        } else {
+            return Optional.of(contents.remove());
+        }
+    }
+
+    public synchronized int getRemaining() {
+        return contents.size();
+    }
+
+    private void promptOptions() {
         Scanner scanner = new Scanner(System.in);
 
-        ResourceBundle bundle = null;
-        while (bundle == null) {
+        while (langBundle == null) {
             System.out.println(
                     "[Select the language]: en-US[English], ko-KR[한국어], ja-JP[日本語], zh-TW[中国的], ru-RU[русский]");
             String code = scanner.nextLine();
             try {
-                bundle = ResourceBundle.getBundle("Lang", Locale.forLanguageTag(code));
+                langBundle = ResourceBundle.getBundle("Lang", Locale.forLanguageTag(code));
             } catch (MissingResourceException e) {
                 System.out.println("Locale does not supported: " + code);
             }
         }
 
-        println(bundle, "type.resource-pack-path");
+        printlnLocalized("type.resource-pack-path");
         System.out.print(" ▶ ");
         String pathString = scanner.nextLine();
 
         loop:while (true) {
-            println(bundle, "select.compress-mode");
+            printlnLocalized("select.compress-mode");
             System.out.print(" ▶ ");
             switch (scanner.nextLine()) {
                 case "1":
@@ -90,7 +131,7 @@ public class Main {
 
         if (compressImage) {
             loop:while (true) {
-                println(bundle, "select.compress-power");
+                printlnLocalized("select.compress-power");
                 System.out.print(" ▶ ");
 
                 switch (scanner.nextLine()) {
@@ -108,44 +149,58 @@ public class Main {
                         break loop;
                     case "5":
                         while (true) {
-                            println(bundle, "select.compress-power.type");
+                            printlnLocalized("select.compress-power.type");
                             System.out.print(" ▶ ");
-                            String toParse = scanner.nextLine();
+                            String compressPowerInput = scanner.nextLine();
+                            int compressionPower;
                             try {
-                                int parsedInt = Integer.parseInt(toParse);
-                                if (parsedInt >= 0 && parsedInt <= 1000) {
-                                    compressionQuality = 1.0f - (parsedInt * 0.001f);
-                                    break;
-                                }
+                                compressionPower = Integer.parseInt(compressPowerInput);
                             } catch (NumberFormatException e) {
-                                // ignore error
+                                continue;
                             }
 
+                            if (compressionPower >= 0 && compressionPower <= 1000) {
+                                compressionQuality = 1.0f - (compressionPower * 0.001f);
+                                break;
+                            }
                         }
                         break loop;
                 }
             }
         }
 
-        int threadCount;
         while (true) {
-            println(bundle, "select.thread-count");
+            printlnLocalized("select.thread-count");
             System.out.print(" ▶ ");
             String threadCountInput = scanner.nextLine();
-            int parsedInt;
+            int threadCountParsed;
             try {
-                parsedInt = Integer.parseInt(threadCountInput);
+                threadCountParsed = Integer.parseInt(threadCountInput);
             } catch (NumberFormatException e) {
                 continue;
             }
 
-            if (parsedInt >= 1 && parsedInt <= 1000) {
-                threadCount = parsedInt;
+            if (threadCountParsed >= 1 && threadCountParsed <= 1000) {
                 break;
             }
         }
 
-        System.out.println("\n\nPath\t: " + pathString);
+        rootDirectory = Paths.get(pathString);
+        try {
+            contents = new ArrayDeque<>(Util.getContents(rootDirectory));
+        } catch (IOException e) {
+            return;
+        }
+
+        originalFileCount = contents.size();
+        try {
+            originalSize = Util.sumSize(contents);
+        } catch (IOException ignored) {
+        }
+    }
+
+    private void printOptions() {
+        System.out.println("\n\nPath\t: " + rootDirectory.toString());
         System.out.print("Compress Target : ");
         if (compressText) {
             System.out.print("Minecraft modelling(Cubik Pro) .json , .mcmeta ");
@@ -157,48 +212,21 @@ public class Main {
             System.out.println("Compression Quality : " + compressionQuality);
         }
         System.out.println("[START]");
-
-        path = Paths.get(pathString);
-        List<Path> paths;
-        try {
-            paths = Util.getContents(path);
-        } catch (IOException e) {
-            return;
-        }
-        fileCount = paths.size();
-
-        try {
-            originalSize = Util.sumSize(paths);
-        } catch (IOException e) {
-            return;
-        }
-
-        running = true;
-        CountDownLatch doneSignal = new CountDownLatch(threadCount);
-
-        for (int i = 0; i < threadCount; i++) {
-            new Compressor(this, i).start();
-        }
-        try {
-            doneSignal.await();
-        } catch (InterruptedException e) {
-            return;
-        }
-        try {
-            printResult();
-        } catch (IOException ignored) {
-        }
     }
 
-
-    public void printResult() throws IOException {
-        long afterSize = Util.sumSize(Util.getContents(path));
+    private void printResult() throws IOException {
+        long afterSize = Util.sumSize(Util.getContents(rootDirectory));
         System.out.println("[END]");
-        System.out.println("Edited Files\t: " + fileCount);
+        System.out.println("Edited Files\t: " + contents.size());
 
         System.out.println(originalSize + " [Before]");
         System.out.println(FileUtils.byteCountToDisplaySize(afterSize) + " [After]");
         System.out.println(FileUtils.byteCountToDisplaySize(originalSize - afterSize) + " [Saved]");
+    }
+
+    private void printlnLocalized(String key) {
+        System.out.println(
+                new String(langBundle.getString(key).getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8));
     }
 
 }

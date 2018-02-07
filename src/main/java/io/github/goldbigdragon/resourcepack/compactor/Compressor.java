@@ -17,85 +17,66 @@
 
 package io.github.goldbigdragon.resourcepack.compactor;
 
+import com.google.common.io.MoreFiles;
 import com.googlecode.pngtastic.core.PngException;
 import com.googlecode.pngtastic.core.PngImage;
 import com.googlecode.pngtastic.core.PngOptimizer;
+import io.github.goldbigdragon.resourcepack.compactor.compressor.FileCompressor;
 
 import java.io.*;
+import java.nio.file.Path;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 
 public class Compressor extends Thread {
 
     private Main main;
-    private CountDownLatch countDownLatch;
+    private CountDownLatch doneSignal;
 
-    public Compressor(Main main, int count, CountDownLatch countDownLatch) {
+    public Compressor(Main main, int count, CountDownLatch doneSignal) {
         this.main = main;
         this.setName("[Thread" + count + "] Created");
-        this.countDownLatch = countDownLatch;
+        this.doneSignal = doneSignal;
     }
 
     @Override
     public void run() {
-        try {
-            int remaining;
-            long start;
-            String fileName;
+        long start = System.currentTimeMillis();
 
-            while (main.running) {
-                    start = System.currentTimeMillis();
-                    fileName = main.imageFilePath.get(0);
-                    main.imageFilePath.remove(fileName);
-                    input = new File(fileName);
-                    if (fileName.endsWith(".png")) {
-                        Integer compressionLevel = 10 - ((int) main.compressPower * 10);
-                        if (compressionLevel > 9) { compressionLevel = 9; } else if (compressionLevel < 0) {
-                            compressionLevel = 0;
-                        }
-
-                        Integer iterations = 1;
-                        String compressor = "zopfli";
-                        String logLevel = "none";
-
-                        PngOptimizer optimizer = new PngOptimizer(logLevel);
-                        optimizer.setCompressor(compressor, iterations);
-
-                        try {
-                            PngImage pngImage = new PngImage(fileName, logLevel);
-                            optimizer.optimize(pngImage, fileName, false, compressionLevel);
-
-                        } catch (PngException | IOException e) {
-                            e.printStackTrace();
-                        }
-
-                        remaining = main.fileCount - (main.jsonFilePath.size() + main.imageFilePath.size());
-                        System.out.println("[" +
-                                           remaining +
-                                           " / " +
-                                           main.totalSize +
-                                           "]" +
-                                           fileName +
-                                           " : " +
-                                           (System.currentTimeMillis() - start) +
-                                           "ms");
-                        continue;
-                    }
-                remaining = main.fileCount - (main.jsonFilePath.size() + main.imageFilePath.size());
-                System.out.println("[" +
-                                   remaining +
-                                   " / " +
-                                   main.fileCount +
-                                   "]" +
-                                   fileName +
-                                   " : " +
-                                   (System.currentTimeMillis() - start) +
-                                   "ms");
+        while (true) {
+            Optional<Path> optionalFile = main.getNextFileToProcess();
+            if (!optionalFile.isPresent()) {
+                break;
             }
-        } catch (IOException | NullPointerException e) {
-            e.printStackTrace();
+
+            Path file = optionalFile.get();
+            processFile(file);
+
+            System.out.println("[" +
+                    main.getRemaining() +
+                    " / " +
+                    main.originalFileCount +
+                    "]" +
+                    file.getFileName() +
+                    " : " +
+                    (System.currentTimeMillis() - start) +
+                    "ms");
         }
+
         System.out.println("[Thread" + getName() + "] Finished work");
-        countDownLatch.countDown();
+        doneSignal.countDown();
+    }
+
+    private void processFile(Path file) {
+        String fileExtension = MoreFiles.getFileExtension(file);
+        if (main.compressorMap.containsKey(fileExtension)) {
+            FileCompressor compressor = main.compressorMap.get(fileExtension);
+            try {
+                compressor.compress(file);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     }
 
     public String getConvertedTextureName(int order) {
