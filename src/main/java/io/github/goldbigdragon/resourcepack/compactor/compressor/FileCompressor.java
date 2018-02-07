@@ -1,3 +1,8 @@
+package io.github.goldbigdragon.resourcepack.compactor.compressor;
+
+import java.io.FilenameFilter;
+import java.nio.file.Path;
+
 /*
  * Copyright 2018 GoldBigDragon (https://github.com/GoldBigDragon) and contributors
  *
@@ -14,28 +19,10 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-group 'io.github.goldbigdragon.resourcepack.compactor'
-version '1.0.0'
-
-apply plugin: 'java'
-apply plugin: 'application'
-
-mainClassName = 'io.github.goldbigdragon.resourcepack.compactor.Main'
-
-compileJava.options.encoding = 'UTF-8'
-
-repositories {
-    mavenCentral()
-}
-
-dependencies {
-    compile group: 'com.github.depsypher', name: 'pngtastic', version: '1.5'
-    testCompile group: 'junit', name: 'junit', version: '4.12'
-    compile group: 'de.xn--ho-hia.storage_units', name: 'storage-units', version: '4.0.0-20160812154711'
-    compile group: 'org.jooq', name: 'jool', version: '0.9.12'
-    compile group: 'com.google.code.gson', name: 'gson', version: '2.8.2'
-}
-
-run {
-    standardInput = System.in
+public interface FileCompressor extends FilenameFilter {
+    /**
+     * Compress the file
+     * @param path the file to compress
+     */
+    void compress(Path path);
 }

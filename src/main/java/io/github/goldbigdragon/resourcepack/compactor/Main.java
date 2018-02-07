@@ -1,9 +1,18 @@
 package io.github.goldbigdragon.resourcepack.compactor;
 
-import java.io.File;
-import java.math.BigInteger;
+import de.xn__ho_hia.storage_unit.StorageUnit;
+import de.xn__ho_hia.storage_unit.StorageUnits;
+import org.jooq.lambda.Unchecked;
+
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /*
  * Copyright 2018 GoldBigDragon (https://github.com/GoldBigDragon) and contributors
@@ -28,13 +37,10 @@ public class Main {
     public static boolean searchInnerDir = true;
     public static float compressPower = 1f;
 
-    public static List<String> jsonFilePath = new ArrayList<>();
-    public static List<String> imageFilePath = new ArrayList<>();
-
     public static ArrayList<Compressor> threads = new ArrayList<>();
 
     public static int totalSize = 0;
-    private static BigInteger originalSize = new BigInteger("0");
+    private static StorageUnit<?> originalSize = StorageUnits.kilobyte(0);
 
 
     public static boolean compressText = false;
@@ -138,8 +144,6 @@ public class Main {
                 // ignore error
             }
         }
-        jsonFilePath.clear();
-        imageFilePath.clear();
 
         System.out.println("\n\nPath\t: " + path);
         System.out.print("Compress Target : ");
@@ -154,10 +158,10 @@ public class Main {
         }
         System.out.println("[START]");
 
-        getFilePath(new File(path));
-        totalSize = jsonFilePath.size() + imageFilePath.size();
+        List<Path> paths = getPaths(Paths.get(path));
+        totalSize = paths.size();
 
-        originalSize = folderSize(new File(path));
+        originalSize = summarizeSize(paths);
 
         started = true;
         threads.clear();
@@ -168,89 +172,29 @@ public class Main {
         }
     }
 
-    public static void getFilePath(File dir) {
-        File[] fList = dir.listFiles();
-        for (File f : fList) {
-            if (searchInnerDir && f.isDirectory()) {
-                getFilePath(new File(f.getAbsolutePath()));
-            } else if (f.isFile()) {
-                if (compressText && f.getName().endsWith(".json") || f.getName().endsWith(".mcmeta")) {
-                    jsonFilePath.add(f.getAbsolutePath());
-                } else if (compressImage && f.getName().endsWith(".png") ||
-                           f.getName().endsWith(".jpg") ||
-                           f.getName().endsWith(".jpeg")) { imageFilePath.add(f.getAbsolutePath()); }
-            }
+    public static List<Path> getPaths(Path path) {
+        try (Stream<Path> stream = Files.walk(path)) {
+            return stream.filter(Files::isRegularFile).collect(Collectors.toList());
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 
-    public static BigInteger folderSize(File directory) {
-        BigInteger bi = new BigInteger("0");
-        for (File file : directory.listFiles()) {
-            if (file.isFile()) {
-                bi = bi.add(BigInteger.valueOf(file.length()));
-            } else {
-                bi = bi.add(folderSize(file));
-            }
-        }
-        return bi;
+    public static StorageUnit<?> summarizeSize(Collection<Path> paths) {
+        return paths.stream()
+                    .map(Unchecked.function(Files::size))
+                    .map(StorageUnits::decimalValueOf)
+                    .reduce(StorageUnit::add)
+                    .orElseThrow(() -> new IllegalArgumentException("Stream must not be a null"));
     }
 
     public static void sendResult() {
-        BigInteger afterSize = folderSize(new File(path));
+        StorageUnit<?> afterSize = summarizeSize(getPaths(Paths.get(path)));
         System.out.println("[END]");
         System.out.println("Edited Files\t: " + totalSize);
 
-        int originalGb = 0;
-        int originalMb = 0;
-        int originalKb = 0;
 
-        int afterGb = 0;
-        int afterMb = 0;
-        int afterKb = 0;
-        //GB
-        if (originalSize.compareTo(BigInteger.valueOf(1073741824)) > -1) {
-            originalGb = originalSize.divide(BigInteger.valueOf(1073741824)).intValue();
-            originalSize = originalSize.subtract(BigInteger.valueOf(originalGb * 1073741824));
-        }
-        //MB
-        if (originalSize.compareTo(BigInteger.valueOf(1048576)) > -1) {
-            originalMb = originalSize.divide(BigInteger.valueOf(1048576)).intValue();
-            originalSize = originalSize.subtract(BigInteger.valueOf(originalMb * 1048576));
-        }
-        //KB
-        if (originalSize.compareTo(BigInteger.valueOf(1024)) > -1) {
-            originalKb = originalSize.divide(BigInteger.valueOf(1024)).intValue();
-            originalSize = originalSize.subtract(BigInteger.valueOf(originalKb * 1024));
-        }
-
-        //GB
-        if (afterSize.compareTo(BigInteger.valueOf(1073741824)) > -1) {
-            afterGb = afterSize.divide(BigInteger.valueOf(1073741824)).intValue();
-            afterSize = afterSize.subtract(BigInteger.valueOf(afterGb * 1073741824));
-        }
-        //MB
-        if (afterSize.compareTo(BigInteger.valueOf(1048576)) > -1) {
-            afterMb = afterSize.divide(BigInteger.valueOf(1048576)).intValue();
-            afterSize = afterSize.subtract(BigInteger.valueOf(afterMb * 1048576));
-        }
-        //KB
-        if (afterSize.compareTo(BigInteger.valueOf(1024)) > -1) {
-            afterKb = afterSize.divide(BigInteger.valueOf(1024)).intValue();
-            afterSize = afterSize.subtract(BigInteger.valueOf(afterKb * 1024));
-        }
-
-        StringBuilder sb = new StringBuilder();
-        if (originalGb > 0) {
-            sb.append(originalGb).append("GB ");
-        }
-        if (originalMb > 0) {
-            sb.append(originalMb).append("MB ");
-        }
-        if (originalKb > 0) {
-            sb.append(originalKb).append("KB ");
-        }
-        sb.append(originalSize.toString());
-        sb.append("Byte [Before]");
+        System.out.println(originalSize + " [Before]");
         System.out.println(sb.toString());
 
         sb = new StringBuilder();
