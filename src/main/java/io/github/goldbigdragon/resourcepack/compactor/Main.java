@@ -72,7 +72,7 @@ public class Main {
         String pathString = scanner.nextLine();
 
         loop:while (true) {
-            println(bundle, "select.compress-mode");\
+            println(bundle, "select.compress-mode");
             System.out.print(" ▶ ");
             switch (scanner.nextLine()) {
                 case "1":
