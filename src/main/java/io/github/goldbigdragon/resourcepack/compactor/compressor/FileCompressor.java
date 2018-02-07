@@ -17,13 +17,13 @@
 
 package io.github.goldbigdragon.resourcepack.compactor.compressor;
 
-import java.io.FilenameFilter;
+import java.io.IOException;
 import java.nio.file.Path;
 
-public interface FileCompressor extends FilenameFilter {
+public interface FileCompressor {
     /**
      * Compress the file
      * @param path the file to compress
      */
-    void compress(Path path);
+    void compress(Path path) throws IOException;
 }
