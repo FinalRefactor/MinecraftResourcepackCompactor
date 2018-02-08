@@ -75,10 +75,4 @@ public class Compressor extends Thread {
             }
         }
     }
-
-    public String getConvertedTextureName(int order) {
-        String amount = Integer.toString(order / 26);
-        order %= 26;
-        return Character.toString((char) (order + 97)) + (amount.equals("0") ? "" : amount);
-    }
 }
