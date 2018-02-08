@@ -23,14 +23,27 @@ import com.google.gson.*;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 public class JsonCompressor implements FileCompressor {
+    private static final String ALPHABETS = "abcdefghijklmnopqrstuvwxyz";
+    private static final Map<String, Double> uselessDecimalMap;
+
+    static {
+        Map<String, Double> uselessDecimals = new HashMap<>();
+        uselessDecimals.put("3333", -0.0033);
+        uselessDecimals.put("6666", -0.0066);
+        uselessDecimals.put("9999", -0.0099);
+        uselessDecimals.put("667", +0.03);
+        uselessDecimalMap = Collections.unmodifiableMap(uselessDecimals);
+    }
+
     private final JsonParser jsonParser = new JsonParser();
     private final Gson gson = new Gson();
 
@@ -41,10 +54,19 @@ public class JsonCompressor implements FileCompressor {
             parsed = jsonParser.parse(reader);
         }
         if ("json".equals(MoreFiles.getFileExtension(path)) && parsed.isJsonObject()) {
-            // modeling file...
-            // todo: texture optimization
+            Map<String, String> optimizedTextureNames = new HashMap<>();
+            JsonObject object = parsed.getAsJsonObject();
+            JsonElement textures = object.get("textures");
+            if (textures.isJsonObject()) {
+                JsonObject texturesObject = textures.getAsJsonObject();
+                int i = 0;
+                for (String key : texturesObject.keySet()) {
+                    optimizedTextureNames.put("#" + key, "#" + optimizeTextureName(i++));
+                }
+            }
+
             AtomicReference<JsonElement> result = new AtomicReference<>();
-            optimize(result::set, parsed, true);
+            optimize(result::set, object, true);
             parsed = result.get();
         }
 
@@ -53,34 +75,42 @@ public class JsonCompressor implements FileCompressor {
         }
     }
 
-    private static boolean optimize(Consumer<JsonElement> set, JsonElement element, boolean root) {
+    private static boolean optimize(Consumer<JsonElement> set, JsonElement element, boolean root,
+                                    Map<String, String> optimizedTextureNames) {
         if (element.isJsonPrimitive()) {
             JsonPrimitive primitive = element.getAsJsonPrimitive();
+            if (primitive.isString()) {
+                String str = primitive.getAsString();
+                if (str.charAt(0) == '#' && optimizedTextureNames.containsKey(str)) {
+                    set.accept(new JsonPrimitive(optimizedTextureNames.get(str)));
+                    return true;
+                }
+                return false;
+            }
             if (!primitive.isNumber()) {
                 return false;
             }
             Number number = primitive.getAsNumber();
-            if (number.toString().indexOf('.') == -1) {
+
+            String toString = number.toString();
+            int dotIndex = number.toString().indexOf('.');
+            if (dotIndex == -1) {
                 if (number.intValue() == -0) {
                     set.accept(new JsonPrimitive(0));
                     return true;
                 }
                 return false;
             }
-            double doubleValue = number.doubleValue();
-            long longValue = number.longValue();
-            if (doubleValue == longValue) {
-                return false;
+            String decimalPlaces = toString.substring(dotIndex + 1);
+            if (uselessDecimalMap.containsKey(decimalPlaces)) {
+                set.accept(new JsonPrimitive(number.doubleValue() + uselessDecimalMap.get(decimalPlaces)));
             }
-            set.accept(new JsonPrimitive(
-                    new BigDecimal(String.valueOf(doubleValue)).setScale(2, RoundingMode.CEILING).floatValue()));
             return true;
         } else if (element.isJsonArray()) {
             JsonArray array = new JsonArray();
             for (JsonElement jsonElement : element.getAsJsonArray()) {
                 if (!optimize(array::add, jsonElement, false)) {
                     array.add(jsonElement);
-                } else {
                 }
             }
             set.accept(array);
@@ -108,9 +138,16 @@ public class JsonCompressor implements FileCompressor {
         }
     }
 
-    private String getConvertedTextureName(int order) {
-        String amount = Integer.toString(order / 26);
-        order %= 26;
-        return Character.toString((char) (order + 97)) + (amount.equals("0") ? "" : amount);
+
+    private static String optimizeTextureName(int order) {
+        if (order < 0) {
+            return String.valueOf(order);
+        }
+        StringBuilder current = new StringBuilder();
+        do {
+            current.append(String.valueOf(ALPHABETS.charAt(order % 26)));
+            order -= 26;
+        } while (order < 26);
+        return current.toString();
     }
 }
