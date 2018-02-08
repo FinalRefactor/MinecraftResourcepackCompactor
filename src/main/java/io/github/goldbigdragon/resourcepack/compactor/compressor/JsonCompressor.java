@@ -66,7 +66,7 @@ public class JsonCompressor implements FileCompressor {
             }
 
             AtomicReference<JsonElement> result = new AtomicReference<>();
-            optimize(result::set, object, true);
+            optimize(result::set, object, true, optimizedTextureNames);
             parsed = result.get();
         }
 
@@ -109,7 +109,7 @@ public class JsonCompressor implements FileCompressor {
         } else if (element.isJsonArray()) {
             JsonArray array = new JsonArray();
             for (JsonElement jsonElement : element.getAsJsonArray()) {
-                if (!optimize(array::add, jsonElement, false)) {
+                if (!optimize(array::add, jsonElement, false, optimizedTextureNames)) {
                     array.add(jsonElement);
                 }
             }
@@ -127,7 +127,7 @@ public class JsonCompressor implements FileCompressor {
                     }
                     continue;
                 }
-                if (!optimize(it -> object.add(key, it), jsonElement, false)) {
+                if (!optimize(it -> object.add(key, it), jsonElement, false, optimizedTextureNames)) {
                     object.add(key, jsonElement);
                 }
             }
