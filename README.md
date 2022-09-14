@@ -1,4 +1,8 @@
-# MinecraftResourcepackCompactor
+# Deprecated, use [PackSquash](https://github.com/ComunidadAylas/PackSquash) instead.
+
+Contents below are old readme content.
+
+## MinecraftResourcepackCompactor
 Diet until it becomes bone!
 
 [English]
